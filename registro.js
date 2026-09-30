@@ -10,7 +10,7 @@
 
   // ⚠️ Reemplaza con los datos de tu proyecto (Supabase → Project Settings → API).
   // La anon/publishable key es pública por diseño; NUNCA pongas la service_role aquí.
-  var SUPABASE_URL = 'https://voooyptyzfwyudmyigyt.supabase.co/auth/v1/health';
+  var SUPABASE_URL = 'https://voooyptyzfwyudmyigyt.supabase.co';
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvb295cHR5emZ3eXVkbXlpZ3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3MDc1NDIsImV4cCI6MjEwNjI4MzU0Mn0.3f77cBTGuLyzSB2HaMh1rf_-OEr4r639XqVq5G9h1sU';
 
   var sb = null;
