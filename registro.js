@@ -1,13 +1,24 @@
 /*
- * Bovipro — formulario de registro SIMULADO
- * -----------------------------------------
+ * Bovipro — formulario de registro conectado a Supabase
+ * -----------------------------------------------------
  * - Se abre desde cualquier elemento con el atributo [data-registro].
- * - Valida en el cliente y muestra un mensaje de éxito.
- * - NO guarda nada: sin fetch/XHR, sin localStorage/sessionStorage, sin cookies.
- *   Los valores viven únicamente en los <input> y se descartan al cerrar/enviar.
+ * - Valida en el cliente y crea la cuenta con Supabase Auth (signUp).
+ * - Requiere cargar antes la librería de Supabase (CDN) en el HTML.
  */
 (function () {
   'use strict';
+
+  // ⚠️ Reemplaza con los datos de tu proyecto (Supabase → Project Settings → API).
+  // La anon/publishable key es pública por diseño; NUNCA pongas la service_role aquí.
+  var SUPABASE_URL = 'https://voooyptyzfwyudmyigyt.supabase.co/rest/v1/';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvb295cHR5emZ3eXVkbXlpZ3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3MDc1NDIsImV4cCI6MjEwNjI4MzU0Mn0.3f77cBTGuLyzSB2HaMh1rf_-OEr4r639XqVq5G9h1sU';
+
+  var sb = null;
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } else {
+    console.error('Supabase no está cargado. Agrega el <script> del CDN antes de registro.js');
+  }
 
   var CSS = [
     '.cta[data-registro]{cursor:pointer;opacity:1;}',
@@ -35,7 +46,8 @@
     '.reg-submit{width:100%;margin-top:16px;padding:12px 22px;border-radius:3px;border:1px solid var(--forest-deep,#223420);',
     '  background:var(--forest,#33502F);color:var(--cream,#FBF8F0);font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;}',
     '.reg-submit:hover{background:var(--forest-deep,#223420);}',
-    '.reg-note{margin:14px 0 0;font-size:12.5px;color:#7a705a;text-align:center;}',
+    '.reg-err[data-for="general"]{text-align:center;margin-top:12px;}',
+    '.reg-submit:disabled{opacity:.6;cursor:wait;}',
     '.reg-ok{text-align:center;padding:14px 0 4px;}',
     '.reg-ok .reg-check{width:52px;height:52px;margin:0 auto 14px;border-radius:50%;background:var(--forest,#33502F);',
     '  color:var(--cream,#FBF8F0);display:flex;align-items:center;justify-content:center;font-size:26px;}',
@@ -66,13 +78,13 @@
     '        <span>Acepto los términos de uso y el aviso de privacidad.</span></label>',
     '      <span class="reg-err" data-for="terms" role="alert"></span>',
     '      <button type="submit" class="reg-submit">Registrarse</button>',
-    '      <p class="reg-note">Demostración: no se guarda ningún dato.</p>',
+    '      <span class="reg-err" data-for="general" role="alert"></span>',
     '    </form>',
     '  </div>',
     '  <div id="reg-ok-view" class="reg-ok reg-hidden">',
     '    <div class="reg-check" aria-hidden="true">&#10003;</div>',
-    '    <h2>¡Registro simulado!</h2>',
-    '    <p>Gracias, <strong id="reg-ok-name"></strong>. Este formulario es una demostración, por lo que <strong>no se almacenó ningún dato</strong>.</p>',
+    '    <h2>¡Cuenta creada!</h2>',
+    '    <p>Gracias, <strong id="reg-ok-name"></strong>. Revisa tu correo para confirmar tu cuenta.</p>',
     '    <button type="button" class="reg-submit reg-done">Cerrar</button>',
     '  </div>',
     '</div>'
@@ -127,7 +139,7 @@
   function reset() {
     if (!form) return;
     form.reset();
-    ['nombre', 'email', 'pass', 'pass2', 'terms'].forEach(function (n) { setError(n, ''); });
+    ['nombre', 'email', 'pass', 'pass2', 'terms', 'general'].forEach(function (n) { setError(n, ''); });
     formView.classList.remove('reg-hidden');
     okView.classList.add('reg-hidden');
   }
@@ -163,12 +175,45 @@
 
     if (!ok) { firstBad.focus(); return; }
 
-    // Éxito simulado: solo se muestra el nombre en pantalla; no se persiste.
-    okView.querySelector('#reg-ok-name').textContent = nombre.split(/\s+/)[0];
-    form.reset();
-    formView.classList.add('reg-hidden');
-    okView.classList.remove('reg-hidden');
-    okView.querySelector('.reg-done').focus();
+    if (!sb) {
+      setError('general', 'No se pudo conectar con el servidor. Intenta más tarde.');
+      return;
+    }
+
+    var submitBtn = form.querySelector('.reg-submit');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creando cuenta…';
+    setError('general', '');
+
+    // Crea el usuario en Supabase Auth; el nombre se guarda en user_metadata
+    sb.auth.signUp({
+      email: email,
+      password: pass,
+      options: { data: { nombre: nombre } }
+    }).then(function (res) {
+      if (res.error) {
+        setError('general', traducirError(res.error));
+        return;
+      }
+      okView.querySelector('#reg-ok-name').textContent = nombre.split(/\s+/)[0];
+      form.reset();
+      formView.classList.add('reg-hidden');
+      okView.classList.remove('reg-hidden');
+      okView.querySelector('.reg-done').focus();
+    }).catch(function () {
+      setError('general', 'Error de conexión. Intenta de nuevo.');
+    }).then(function () {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Registrarse';
+    });
+  }
+
+  function traducirError(err) {
+    var m = (err.message || '').toLowerCase();
+    if (m.indexOf('already registered') !== -1) return 'Este correo ya está registrado.';
+    if (m.indexOf('password') !== -1) return 'La contraseña no cumple los requisitos.';
+    if (m.indexOf('rate limit') !== -1) return 'Demasiados intentos. Espera unos minutos.';
+    return 'No se pudo crear la cuenta. Intenta de nuevo.';
   }
 
   document.addEventListener('click', function (e) {
